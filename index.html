@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trò chơi Sudoku</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      @font-face {
+        font-family: 'LucideIcons';
+        src: url(https://cdn.jsdelivr.net/npm/lucide-static@0.473.0/font/lucide.ttf) format('truetype');
+      }
+      .lucide {
+        font-family: 'LucideIcons';
+        font-size: 1.25rem;
+        line-height: 1;
+        display: inline-block;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f3f4f6;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 1rem;
+      }
+      #sudoku-grid {
+        display: grid;
+        grid-template-columns: repeat(9, minmax(0, 1fr));
+        grid-template-rows: repeat(9, minmax(0, 1fr));
+        width: clamp(300px, 90vw, 500px);
+        height: clamp(300px, 90vw, 500px);
+        border: 3px solid #374151;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+      }
+      .sudoku-cell {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border: 1px solid #d1d5db;
+        font-size: clamp(1rem, 4vw, 1.5rem);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        position: relative;
+      }
+      .sudoku-cell input {
+          width: 100%;
+          height: 100%;
+          text-align: center;
+          border: none;
+          outline: none;
+          font-size: inherit;
+          font-weight: inherit;
+          background-color: transparent;
+          padding: 0;
+          color: #1d4ed8;
+      }
+      .sudoku-cell.prefilled {
+          background-color: #e5e7eb;
+          color: #1f2937;
+          cursor: default;
+          font-weight: 700;
+      }
+      .sudoku-cell.selected {
+          background-color: #bfdbfe;
+      }
+      .sudoku-cell.highlight {
+          background-color: #dbeafe;
+      }
+      .sudoku-cell.error {
+          background-color: #fee2e2;
+          color: #dc2626;
+      }
+      .sudoku-cell.error input {
+          color: #dc2626;
+      }
+      .sudoku-cell:nth-child(3n) { border-right-width: 2px; border-right-color: #6b7280; }
+      .sudoku-cell:nth-child(9n) { border-right: 1px solid #d1d5db; }
+      .sudoku-row:nth-child(3n) .sudoku-cell { border-bottom-width: 2px; border-bottom-color: #6b7280; }
+      .sudoku-row:last-child .sudoku-cell { border-bottom: 1px solid #d1d5db; }
+      #sudoku-grid > .sudoku-cell:nth-child(3n+1) { border-left-width: 2px; border-left-color: #6b7280; }
+      #sudoku-grid > .sudoku-cell:nth-child(n+1):nth-child(-n+9) { border-top-width: 2px; border-top-color: #6b7280; }
+      #sudoku-grid > .sudoku-cell:nth-child(n+19):nth-child(-n+27) { border-top-width: 2px; border-top-color: #6b7280; }
+      #sudoku-grid > .sudoku-cell:nth-child(n+46):nth-child(-n+54) { border-top-width: 2px; border-top-color: #6b7280; }
+      #sudoku-grid > .sudoku-cell:nth-child(n+73):nth-child(-n+81) { border-top-width: 2px; border-top-color: #6b7280; }
+
+      #number-pad {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr); /* Đổi thành 3 cột */
+          gap: 0.5rem;
+          width: 150px; /* Điều chỉnh chiều rộng nếu cần */
+      }
+      #number-pad button {
+          aspect-ratio: 1 / 1;
+      }
+      #erase-btn {
+          grid-column: span 3; /* Nút xóa chiếm cả 3 cột */
+          margin-top: 0.5rem;
+      }
+
+      @media (max-width: 768px) { /* Điều chỉnh breakpoint nếu cần */
+        #game-container {
+            flex-direction: column;
+            align-items: center;
+        }
+        #controls-and-pad {
+            margin-top: 1rem;
+            width: auto; /* Reset width */
+        }
+         #number-pad {
+            width: clamp(150px, 50vw, 200px); /* Điều chỉnh kích thước bảng số trên mobile */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #controls {
+             margin-top: 1rem;
+             justify-content: center;
+        }
+      }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center p-4">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-4">Sudoku Vui Vẻ</h1>
+
+    <div class="flex flex-col sm:flex-row justify-between items-center w-full max-w-4xl mb-4 gap-4">
+        <div id="difficulty-levels" class="flex flex-wrap justify-center gap-2">
+            <span class="text-gray-700 font-medium self-center mr-2">Độ khó:</span>
+            <button data-difficulty="easy" class="difficulty-btn px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition duration-200 text-sm">Dễ</button>
+            <button data-difficulty="medium" class="difficulty-btn px-3 py-1 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition duration-200 text-sm">Trung bình</button>
+            <button data-difficulty="hard" class="difficulty-btn px-3 py-1 bg-red-500 text-white rounded-md hover:bg-red-600 transition duration-200 text-sm">Khó</button>
+            <button data-difficulty="expert" class="difficulty-btn px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition duration-200 text-sm">Chuyên gia</button>
+        </div>
+        <div class="text-lg font-semibold text-gray-700">
+            Thời gian: <span id="timer">00:00</span>
+        </div>
+    </div>
+
+    <div id="game-container" class="flex flex-col md:flex-row items-start gap-6 w-full max-w-4xl">
+        <div id="sudoku-grid">
+            </div>
+
+        <div id="controls-and-pad" class="flex flex-col items-center md:items-start">
+             <div id="number-pad" class="mb-4">
+                <button data-number="1" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">1</button>
+                <button data-number="2" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">2</button>
+                <button data-number="3" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">3</button>
+                <button data-number="4" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">4</button>
+                <button data-number="5" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">5</button>
+                <button data-number="6" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">6</button>
+                <button data-number="7" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">7</button>
+                <button data-number="8" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">8</button>
+                <button data-number="9" class="number-btn px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200 font-semibold">9</button>
+                <button id="erase-btn" class="px-4 py-2 bg-gray-400 text-white rounded-md hover:bg-gray-500 transition duration-200 font-semibold flex items-center justify-center">
+                    <span class="lucide">&#xea5a;</span> </button>
+            </div>
+
+            <div id="controls" class="flex flex-wrap justify-center md:justify-start gap-3">
+                <button id="new-game-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition duration-200 flex items-center gap-1">
+                    <span class="lucide">&#xea49;</span> <span>Game Mới</span>
+                </button>
+                <button id="hint-btn" class="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition duration-200 flex items-center gap-1">
+                     <span class="lucide">&#xea1f;</span> <span>Gợi ý (<span id="hint-count">3</span>)</span>
+                </button>
+                <button id="solve-btn" class="px-4 py-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 transition duration-200 flex items-center gap-1">
+                     <span class="lucide">&#xea16;</span> <span>Giải đố</span>
+                </button>
+            </div>
+             <div id="message" class="mt-4 text-lg font-bold text-green-600 text-center md:text-left w-full"></div>
+        </div>
+    </div>
+
+
+    <script>
+        const gridElement = document.getElementById('sudoku-grid');
+        const timerElement = document.getElementById('timer');
+        const messageElement = document.getElementById('message');
+        const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+        const numberPadButtons = document.querySelectorAll('.number-btn');
+        const eraseButton = document.getElementById('erase-btn');
+        const newGameButton = document.getElementById('new-game-btn');
+        const hintButton = document.getElementById('hint-btn');
+        const hintCountElement = document.getElementById('hint-count');
+        const solveButton = document.getElementById('solve-btn');
+
+        let currentPuzzle = [];
+        let solution = [];
+        let userBoard = [];
+        let selectedCell = null;
+        let timerInterval = null;
+        let secondsElapsed = 0;
+        let hintCount = 3;
+        let currentDifficulty = 'medium';
+
+        const difficultyLevels = {
+            easy: 45,
+            medium: 38,
+            hard: 30,
+            expert: 22
+        };
+
+        function generateSudoku(difficulty) {
+            solution = generateFullSolution();
+            userBoard = solution.map(row => [...row]);
+            currentPuzzle = createPuzzle(solution, difficultyLevels[difficulty]);
+            userBoard = currentPuzzle.map(row => [...row]);
+            hintCount = 3;
+            updateHintCount();
+        }
+
+        function generateFullSolution() {
+            const board = Array(9).fill(0).map(() => Array(9).fill(0));
+            fillGrid(board);
+            return board;
+        }
+
+        function fillGrid(board) {
+            const find = findEmpty(board);
+            if (!find) {
+                return true;
+            }
+            const [row, col] = find;
+            const nums = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+            for (let num of nums) {
+                if (isValid(board, num, find)) {
+                    board[row][col] = num;
+                    if (fillGrid(board)) {
+                        return true;
+                    }
+                    board[row][col] = 0;
+                }
+            }
+            return false;
+        }
+
+        function findEmpty(board) {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (board[r][c] === 0) {
+                        return [r, c];
+                    }
+                }
+            }
+            return null;
+        }
+
+        function isValid(board, num, pos) {
+            const [row, col] = pos;
+            for (let c = 0; c < 9; c++) {
+                if (board[row][c] === num && col !== c) return false;
+            }
+            for (let r = 0; r < 9; r++) {
+                if (board[r][col] === num && row !== r) return false;
+            }
+            const boxRow = Math.floor(row / 3) * 3;
+            const boxCol = Math.floor(col / 3) * 3;
+            for (let r = boxRow; r < boxRow + 3; r++) {
+                for (let c = boxCol; c < boxCol + 3; c++) {
+                    if (board[r][c] === num && (r !== row || c !== col)) return false;
+                }
+            }
+            return true;
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function createPuzzle(solvedBoard, cellsToKeep) {
+            const puzzle = solvedBoard.map(row => [...row]);
+            let cellsToRemove = 81 - cellsToKeep;
+            while (cellsToRemove > 0) {
+                const row = Math.floor(Math.random() * 9);
+                const col = Math.floor(Math.random() * 9);
+                if (puzzle[row][col] !== 0) {
+                    puzzle[row][col] = 0;
+                    cellsToRemove--;
+                }
+            }
+            return puzzle;
+        }
+
+        function renderBoard() {
+            gridElement.innerHTML = '';
+            gridElement.classList.remove('solved');
+            messageElement.textContent = '';
+
+            for (let r = 0; r < 9; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.classList.add('sudoku-row', 'contents');
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('sudoku-cell');
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    const value = currentPuzzle[r][c];
+                    const userValue = userBoard[r][c];
+
+                    if (value !== 0) {
+                        cell.textContent = value;
+                        cell.classList.add('prefilled');
+                    } else {
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.min = '1';
+                        input.max = '9';
+                        input.pattern = '[1-9]';
+                        input.value = userValue !== 0 ? userValue : '';
+                        input.addEventListener('input', handleInput);
+                        input.addEventListener('focus', () => selectCell(r, c, cell));
+                        input.addEventListener('keydown', handleKeyDown);
+                        cell.appendChild(input);
+                        cell.addEventListener('click', () => input.focus());
+                    }
+                    rowDiv.appendChild(cell);
+                }
+                 gridElement.appendChild(rowDiv);
+            }
+            selectedCell = null;
+            removeHighlights();
+        }
+
+        function handleInput(event) {
+            const input = event.target;
+            const cellElement = input.parentElement;
+            const row = parseInt(cellElement.dataset.row);
+            const col = parseInt(cellElement.dataset.col);
+            let value = parseInt(input.value);
+
+            if (input.value.length > 1) {
+                input.value = input.value.slice(0, 1);
+                value = parseInt(input.value);
+            }
+
+            if (isNaN(value) || value < 1 || value > 9) {
+                 if (input.value === '') {
+                    userBoard[row][col] = 0;
+                    cellElement.classList.remove('error');
+                    validateBoard(); // Re-validate board after clearing a cell
+                 } else {
+                    input.value = '';
+                    userBoard[row][col] = 0;
+                 }
+            } else {
+                userBoard[row][col] = value;
+                validateCell(row, col, cellElement, value);
+            }
+
+             if (isBoardFull() && isBoardValid()) {
+                winGame();
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (!selectedCell) return;
+            let { row, col } = selectedCell;
+            let moved = false;
+
+            switch (event.key) {
+                case 'ArrowUp': row = Math.max(0, row - 1); moved = true; break;
+                case 'ArrowDown': row = Math.min(8, row + 1); moved = true; break;
+                case 'ArrowLeft': col = Math.max(0, col - 1); moved = true; break;
+                case 'ArrowRight': col = Math.min(8, col + 1); moved = true; break;
+                case 'Backspace':
+                case 'Delete':
+                    const currentCellElement = gridElement.querySelector(`.sudoku-cell[data-row="${selectedCell.row}"][data-col="${selectedCell.col}"]`);
+                    if (currentCellElement && !currentCellElement.classList.contains('prefilled')) {
+                         const input = currentCellElement.querySelector('input');
+                         if(input) {
+                            input.value = '';
+                            userBoard[selectedCell.row][selectedCell.col] = 0;
+                            currentCellElement.classList.remove('error');
+                            validateBoard();
+                         }
+                    }
+                    event.preventDefault();
+                    break;
+                 case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+                     const targetCell = gridElement.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+                     if (targetCell && !targetCell.classList.contains('prefilled')) {
+                         const input = targetCell.querySelector('input');
+                         if (input) {
+                            input.value = event.key;
+                            const inputEvent = new Event('input', { bubbles: true });
+                            input.dispatchEvent(inputEvent);
+                         }
+                     }
+                     event.preventDefault();
+                     break;
+            }
+
+            if (moved) {
+                event.preventDefault();
+                const nextCellElement = gridElement.querySelector(`.sudoku-cell[data-row="${row}"][data-col="${col}"]`);
+                if (nextCellElement) {
+                     const input = nextCellElement.querySelector('input');
+                     if (input) {
+                         input.focus();
+                     } else {
+                          selectCell(row, col, nextCellElement);
+                     }
+                }
+            }
+        }
+
+        function selectCell(row, col, element) {
+            removeHighlights();
+            selectedCell = { row, col, element };
+            element.classList.add('selected');
+            highlightRelatedCells(row, col);
+        }
+
+        function removeHighlights() {
+            const allCells = gridElement.querySelectorAll('.sudoku-cell');
+            allCells.forEach(cell => {
+                cell.classList.remove('selected', 'highlight');
+            });
+            // Do not remove 'error' class here, let validation handle it
+            selectedCell = null;
+        }
+
+        function highlightRelatedCells(row, col) {
+            const allCells = gridElement.querySelectorAll('.sudoku-cell');
+            const boxRowStart = Math.floor(row / 3) * 3;
+            const boxColStart = Math.floor(col / 3) * 3;
+
+            allCells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                if (r === row || c === col || (r >= boxRowStart && r < boxRowStart + 3 && c >= boxColStart && c < boxColStart + 3)) {
+                    cell.classList.add('highlight');
+                }
+            });
+            if(selectedCell && selectedCell.element) {
+                selectedCell.element.classList.remove('highlight');
+                selectedCell.element.classList.add('selected');
+            }
+        }
+
+        function validateCell(row, col, cellElement, value) {
+            if (value === 0 || cellElement.classList.contains('prefilled')) {
+                 cellElement.classList.remove('error');
+                 return true;
+            }
+            const tempBoard = userBoard.map(r => [...r]);
+            tempBoard[row][col] = 0;
+            if (!isValid(tempBoard, value, [row, col])) {
+                cellElement.classList.add('error');
+                return false;
+            } else {
+                cellElement.classList.remove('error');
+                validateBoard(); // Re-validate related cells after a valid input
+                return true;
+            }
+        }
+
+        function validateBoard() {
+            let hasError = false;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cellElement = gridElement.querySelector(`.sudoku-cell[data-row="${r}"][data-col="${c}"]`);
+                    const value = userBoard[r][c];
+                    if (value !== 0 && cellElement && !cellElement.classList.contains('prefilled')) {
+                        const tempBoard = userBoard.map(row => [...row]);
+                        tempBoard[r][c] = 0;
+                        if (!isValid(tempBoard, value, [r, c])) {
+                            cellElement.classList.add('error');
+                            hasError = true;
+                        } else {
+                             // Only remove error if it's not the currently selected cell causing the error elsewhere
+                             if (!cellElement.classList.contains('selected') || isValid(userBoard, value, [r,c])) {
+                                cellElement.classList.remove('error');
+                             }
+                        }
+                    } else if (cellElement && !cellElement.classList.contains('prefilled') && value === 0) {
+                         cellElement.classList.remove('error');
+                    }
+                }
+            }
+            return !hasError;
+        }
+
+        function isBoardFull() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (userBoard[r][c] === 0) return false;
+                }
+            }
+            return true;
+        }
+
+        function isBoardValid() {
+             for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const value = userBoard[r][c];
+                    if (value !== 0) {
+                        const tempBoard = userBoard.map(row => [...row]);
+                        tempBoard[r][c] = 0;
+                        if (!isValid(tempBoard, value, [r, c])) return false;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function winGame() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            messageElement.textContent = `Chúc mừng! Bạn đã giải xong Sudoku trong ${formatTime(secondsElapsed)}!`;
+            messageElement.classList.remove('text-red-600');
+            messageElement.classList.add('text-green-600');
+            gridElement.classList.add('solved');
+            removeHighlights();
+             const inputs = gridElement.querySelectorAll('input');
+             inputs.forEach(input => input.disabled = true);
+        }
+
+        function startTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            secondsElapsed = 0;
+            timerElement.textContent = formatTime(secondsElapsed);
+            timerInterval = setInterval(() => {
+                secondsElapsed++;
+                timerElement.textContent = formatTime(secondsElapsed);
+            }, 1000);
+        }
+
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function startNewGame(difficulty) {
+            currentDifficulty = difficulty;
+            generateSudoku(difficulty);
+            renderBoard();
+            startTimer();
+            difficultyButtons.forEach(btn => {
+                btn.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500');
+                if(btn.dataset.difficulty === difficulty) {
+                     btn.classList.add('ring-2', 'ring-offset-2', 'ring-blue-500');
+                }
+            });
+            const inputs = gridElement.querySelectorAll('input');
+            inputs.forEach(input => input.disabled = false);
+             solveButton.disabled = false; // Re-enable solve button
+             hintButton.disabled = hintCount <= 0; // Re-enable hint button if hints available
+             numberPadButtons.forEach(btn => btn.disabled = false);
+             eraseButton.disabled = false;
+        }
+
+        function updateHintCount() {
+            hintCountElement.textContent = hintCount;
+            hintButton.disabled = hintCount <= 0;
+            hintButton.classList.toggle('opacity-50', hintCount <= 0);
+            hintButton.classList.toggle('cursor-not-allowed', hintCount <= 0);
+        }
+
+        function handleHint() {
+            if (hintCount <= 0) return;
+            const emptyCells = [];
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (userBoard[r][c] === 0) emptyCells.push({ r, c });
+                }
+            }
+            if (emptyCells.length === 0) return;
+            const randomIndex = Math.floor(Math.random() * emptyCells.length);
+            const { r, c } = emptyCells[randomIndex];
+            const correctValue = solution[r][c];
+            const cellElement = gridElement.querySelector(`.sudoku-cell[data-row="${r}"][data-col="${c}"]`);
+            if (cellElement) {
+                const input = cellElement.querySelector('input');
+                if (input) {
+                    input.value = correctValue;
+                    userBoard[r][c] = correctValue;
+                    cellElement.classList.remove('error');
+                    const inputEvent = new Event('input', { bubbles: true });
+                    input.dispatchEvent(inputEvent);
+                    cellElement.classList.add('bg-yellow-200', 'transition', 'duration-500');
+                    setTimeout(() => cellElement.classList.remove('bg-yellow-200'), 1000);
+                }
+            }
+            hintCount--;
+            updateHintCount();
+            validateBoard();
+             if (isBoardFull() && isBoardValid()) {
+                winGame();
+            }
+        }
+
+        function handleSolve() {
+             if (!confirm('Bạn có chắc muốn xem lời giải? Tiến trình hiện tại sẽ bị mất.')) return;
+            clearInterval(timerInterval);
+            timerInterval = null;
+            userBoard = solution.map(row => [...row]);
+            gridElement.innerHTML = '';
+             for (let r = 0; r < 9; r++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.classList.add('sudoku-row', 'contents');
+                for (let c = 0; c < 9; c++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('sudoku-cell');
+                    if (currentPuzzle[r][c] !== 0) {
+                         cell.classList.add('prefilled');
+                         cell.textContent = solution[r][c];
+                    } else {
+                        cell.textContent = solution[r][c];
+                        cell.classList.add('text-blue-600');
+                    }
+                    rowDiv.appendChild(cell);
+                }
+                 gridElement.appendChild(rowDiv);
+            }
+            messageElement.textContent = 'Đã hiển thị lời giải.';
+            messageElement.classList.remove('text-green-600');
+            messageElement.classList.add('text-blue-600');
+            removeHighlights();
+            hintButton.disabled = true;
+            solveButton.disabled = true;
+            eraseButton.disabled = true;
+            numberPadButtons.forEach(btn => btn.disabled = true);
+        }
+
+        difficultyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const difficulty = button.dataset.difficulty;
+                startNewGame(difficulty);
+            });
+        });
+
+        newGameButton.addEventListener('click', () => {
+             if (confirm('Bắt đầu game mới? Tiến trình hiện tại sẽ bị mất.')) {
+                 startNewGame(currentDifficulty);
+             }
+        });
+
+        hintButton.addEventListener('click', handleHint);
+        solveButton.addEventListener('click', handleSolve);
+
+        numberPadButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!selectedCell || selectedCell.element.classList.contains('prefilled')) return;
+                const number = parseInt(button.dataset.number);
+                const input = selectedCell.element.querySelector('input');
+                if (input) {
+                    input.value = number;
+                    const inputEvent = new Event('input', { bubbles: true });
+                    input.dispatchEvent(inputEvent);
+                }
+            });
+        });
+
+        eraseButton.addEventListener('click', () => {
+            if (!selectedCell || selectedCell.element.classList.contains('prefilled')) return;
+            const input = selectedCell.element.querySelector('input');
+            if (input) {
+                input.value = '';
+                const inputEvent = new Event('input', { bubbles: true });
+                input.dispatchEvent(inputEvent);
+                selectedCell.element.classList.remove('error');
+                validateBoard();
+            }
+        });
+
+         document.addEventListener('click', (event) => {
+            const clickedInsideGrid = gridElement.contains(event.target);
+            const clickedInsidePad = event.target.closest('#controls-and-pad'); // Check container for pad and controls
+
+            if (!clickedInsideGrid && !clickedInsidePad) {
+                removeHighlights();
+            }
+         });
+
+        window.onload = () => {
+            startNewGame(currentDifficulty);
+        };
+    </script>
+</body>
+</html>
